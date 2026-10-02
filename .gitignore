@@ -1,0 +1,23 @@
+# Virtual environments
+.venv/
+.venv-1/
+venv/
+env/
+
+# Python caches / build artifacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Streamlit secrets
+.streamlit/secrets.toml
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
+
+# Stray accidental empty file
+26.2.1
