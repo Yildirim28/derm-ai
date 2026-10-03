@@ -8,86 +8,93 @@ from tensorflow.keras.applications.mobilenet_v2 import preprocess_input
 # 1. PAGE CONFIG & MODERN STYLING
 # ==========================================
 st.set_page_config(
-    page_title="AI Skin Disease Classifier",
+    page_title="DermAI — Skin Disease Classifier",
     page_icon="🩺",
     layout="wide"
 )
 
-# Custom CSS for modern look
+# Custom CSS for modern glassmorphism & clean UI
 st.markdown("""
     <style>
-    .main-header {
-        font-size: 2.5rem;
-        color: #2c3e50;
-        font-weight: 700;
+    .main-title {
+        font-size: 2.8rem;
+        font-weight: 800;
+        background: linear-gradient(90deg, #2b6cb0, #4fd1c5);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 0px;
     }
-    .sub-text {
-        font-size: 1.1rem;
-        color: #7f8c8d;
+    .sub-title {
+        font-size: 1.15rem;
+        color: #64748b;
+        margin-bottom: 2rem;
     }
-    .card {
-        padding: 20px;
-        border-radius: 10px;
-        background-color: #f8f9fa;
-        border: 1px solid #e9ecef;
+    .stButton>button {
+        border-radius: 8px;
+        font-weight: 600;
+        transition: all 0.3s ease;
+    }
+    .stButton>button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     }
     </style>
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. SIDEBAR TAB: PROJECT & TEAM DETAILS
+# 2. SIDEBAR TAB: PROJECT & SYSTEM DETAILS
 # ==========================================
 with st.sidebar:
-    st.image("https://img.icons8.com/color/96/chatbot.png", width=80)
-    st.title("Project Details")
+    st.markdown("### 🧬 **DermAI**")
+    st.caption("Advanced Deep Learning Healthcare System")
     st.markdown("---")
     
-    st.subheader("📌 About the Project")
+    st.markdown("#### 📌 About the Project")
     st.write(
-        "This system is developed as a **Final Year Design Project (FYDP)** "
-        "to provide preliminary skin disease assessments using deep learning."
+        "**DermAI** is an intelligent web application designed as a "
+        "Final Year Design Project (FYDP) to provide fast, reliable preliminary "
+        "skin disease classifications using computer vision."
     )
     
     st.markdown("---")
-    st.subheader("⚙️ Model Specifications")
+    st.markdown("#### ⚙️ Model Specifications")
     st.markdown("""
-    * **Architecture:** MobileNetV2 (Optimized)
-    * **Input Resolution:** 224x224 px
+    * **Architecture:** MobileNetV2 *(Optimized)*
+    * **Input Dimension:** 224 × 224 px
     * **Target Classes:** 5 Categories
-    * **Reliability Threshold:** 60% Confidence
+    * **Safety Threshold:** 60% Confidence
     """)
     
     st.markdown("---")
-    st.subheader("👥 Developer / Team")
+    st.markdown("#### 🏫 Institution & Context")
     st.markdown("""
-    * **Student ID:** 0112230663
-    * **Institution:** United International University (UIU)
-    * **Department:** CSE
+    * **Department:** Computer Science & Engineering
+    * **Affiliation:** United International University (UIU)
     """)
     
     st.markdown("---")
-    st.caption("© 2026 AI Healthcare Research Initiative")
+    st.caption("© 2026 DermAI Research Initiative")
 
 # ==========================================
-# 3. MAIN INTERFACE CONTENT
+# 3. MAIN HEADER SECTION
 # ==========================================
-st.markdown('<p class="main-header">🩺 AI-Based Skin Disease Classification</p>', unsafe_allow_html=True)
-st.markdown('<p class="sub-text">Upload a clear skin lesion image for a fast, AI-powered preliminary diagnosis.</p>', unsafe_allow_html=True)
+st.markdown('<p class="main-title">🩺 DermAI: Skin Disease Classifier</p>', unsafe_allow_html=True)
+st.markdown('<p class="sub-title">Upload a clear dermatological image below to receive an instant, AI-driven preliminary assessment.</p>', unsafe_allow_html=True)
 st.markdown("---")
 
 # ==========================================
-# 4. LOAD MODEL (Cached)
+# 4. LOAD MODEL (Cached for Performance)
 # ==========================================
 @st.cache_resource
 def load_model():
     return tf.keras.models.load_model('mobilenet_v2_optimized.h5')
 
-with st.spinner("Initializing AI Engine... Please wait."):
+with st.spinner("🔄 Loading Optimized AI Engine... Please wait."):
     try:
         model = load_model()
     except Exception as e:
         st.error(f"Error loading model file: {e}")
-        st.info("💡 Tip: Ensure 'mobilenet_v2_optimized.h5' is placed in the root directory alongside 'app.py'.")
+        st.info("💡 **Tip:** Ensure `mobilenet_v2_optimized.h5` is placed in the exact same directory as `app.py`.")
         st.stop()
 
 CLASS_NAMES = ['Acne', 'Eczema', 'Melanoma', 'Normal Skin', 'Psoriasis']
@@ -103,23 +110,23 @@ def process_image(img):
     return preprocess_input(img_array)
 
 # ==========================================
-# 6. UPLOAD & PREDICTION WORKFLOW
+# 6. DUAL-COLUMN UI: UPLOAD & PREDICTION
 # ==========================================
 col1, col2 = st.columns([1, 1], gap="large")
 
 with col1:
-    st.subheader("📤 Upload Image")
-    uploaded_file = st.file_uploader("Choose an image file...", type=["jpg", "png", "jpeg"])
+    st.markdown("#### 📤 Step 1: Upload Image")
+    uploaded_file = st.file_uploader("Choose a skin lesion photo...", type=["jpg", "png", "jpeg"])
     
     if uploaded_file is not None:
         image = Image.open(uploaded_file)
         st.image(image, caption='Uploaded Skin Sample', use_column_width=True)
 
 with col2:
-    st.subheader("📊 Analysis Results")
+    st.markdown("#### 🔍 Step 2: Diagnostic Analysis")
     if uploaded_file is not None:
-        if st.button("Run Classification", type="primary", use_container_width=True):
-            with st.spinner("Analyzing dermatological features..."):
+        if st.button("Run AI Classification", type="primary", use_container_width=True):
+            with st.spinner("Analyzing patterns and feature maps..."):
                 processed_img = process_image(image)
                 predictions = model.predict(processed_img)[0]
                 
@@ -131,27 +138,28 @@ with col2:
                 # Uncertainty Handling (60% Threshold)
                 if max_prob < 0.60:
                     st.warning("⚠️ **Uncertain Prediction Detected**")
-                    st.write(f"Model confidence is **{max_prob*100:.2f}%** (Below the 60% threshold).")
-                    st.info("💡 **Recommendation:** Please consult a certified dermatologist for verification.")
+                    st.write(f"Model confidence stands at **{max_prob*100:.2f}%**, which falls below our strict **60% reliability threshold**.")
+                    st.info("💡 **Recommendation:** Due to low certainty, please consult a certified dermatologist for professional diagnosis.")
                 else:
                     st.success(f"### Predicted Condition: **{predicted_class}**")
-                    st.metric(label="Confidence Score", value=f"{max_prob*100:.2f}%")
+                    st.metric(label="Model Confidence Score", value=f"{max_prob*100:.2f}%")
                 
                 # Probability Distribution Breakdown
-                st.write("#### Confidence Breakdown:")
+                st.markdown("##### Detailed Class Probabilities:")
                 for i, class_name in enumerate(CLASS_NAMES):
                     prob = predictions[i] * 100
                     st.progress(int(round(prob)), text=f"{class_name}: {prob:.2f}%")
     else:
-        st.info("👈 Please upload an image on the left panel to begin analysis.")
+        st.info("👈 Please upload an image on the left panel to activate the classifier.")
 
 # ==========================================
 # 7. FOOTER & DISCLAIMER
 # ==========================================
 st.markdown("---")
 st.markdown(
-    "<div style='text-align: center; color: gray; font-size: 0.85rem;'>"
-    "Disclaimer: Developed as a Final Year Academic Project. Not intended for formal medical diagnosis."
+    "<div style='text-align: center; color: #94a3b8; font-size: 0.85rem;'>"
+    "<b>Disclaimer:</b> DermAI is developed as an academic Final Year Design Project (FYDP). "
+    "It is intended solely for educational and research purposes and must not replace formal medical advice."
     "</div>", 
     unsafe_allow_html=True
 )
