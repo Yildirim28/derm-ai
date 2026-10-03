@@ -1,4 +1,5 @@
 import json
+import textwrap
 from pathlib import Path
 
 import numpy as np
@@ -41,7 +42,12 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-st.markdown(
+
+def html(markup):
+    st.markdown(textwrap.dedent(markup).strip(), unsafe_allow_html=True)
+
+
+html(
     """
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
@@ -142,8 +148,7 @@ st.markdown(
 
     footer { visibility: hidden; }
     </style>
-    """,
-    unsafe_allow_html=True,
+    """
 )
 
 
@@ -173,7 +178,7 @@ def render_result(predicted_class, max_prob, predictions):
     band, band_label = confidence_band(max_prob)
     pct = max_prob * 100
 
-    st.markdown(
+    html(
         f"""
         <div class="panel result-card">
             <div class="label">Predicted condition</div>
@@ -187,34 +192,28 @@ def render_result(predicted_class, max_prob, predictions):
             </div>
             <div class="chip {band}">{band_label}</div>
         </div>
-        """,
-        unsafe_allow_html=True,
+        """
     )
 
     bars = []
     for name, prob in sorted(zip(CLASS_NAMES, predictions), key=lambda x: x[1], reverse=True):
         color = CLASS_META.get(name, {}).get("color", "#6366f1")
         value = prob * 100
+        width = max(value, 0.7)
         bars.append(
-            f"""
-            <div class="bar-row">
-                <div class="bar-top"><span>{name}</span><span class="val">{value:.2f}%</span></div>
-                <div class="bar-track">
-                    <div class="bar-fill" style="width:{max(value, 0.7):.2f}%;background:linear-gradient(90deg,{color}aa,{color});"></div>
-                </div>
-            </div>
-            """
+            '<div class="bar-row">'
+            f'<div class="bar-top"><span>{name}</span><span class="val">{value:.2f}%</span></div>'
+            '<div class="bar-track">'
+            f'<div class="bar-fill" style="width:{width:.2f}%;background:linear-gradient(90deg,{color}aa,{color});"></div>'
+            "</div></div>"
         )
 
-    st.markdown(
-        f"""
-        <div class="panel">
-            <h3>Probability distribution</h3>
-            <p class="muted">Class-wise likelihood produced by the MobileNetV2 model.</p>
-            {''.join(bars)}
-        </div>
-        """,
-        unsafe_allow_html=True,
+    html(
+        '<div class="panel">'
+        "<h3>Probability distribution</h3>"
+        '<p class="muted">Class-wise likelihood produced by the MobileNetV2 model.</p>'
+        + "".join(bars)
+        + "</div>"
     )
 
 
@@ -232,7 +231,7 @@ with st.spinner("Warming up the neural network..."):
 with st.sidebar:
     st.markdown("### Derm-AI")
     st.caption("Deep learning based skin disease detection.")
-    st.markdown(
+    html(
         """
         <div class="info-grid">
             <div class="info-tile"><div class="k">Architecture</div><div class="v">MobileNetV2</div></div>
@@ -240,23 +239,21 @@ with st.sidebar:
             <div class="info-tile"><div class="k">Classes</div><div class="v">5</div></div>
             <div class="info-tile"><div class="k">Threshold</div><div class="v">60%</div></div>
         </div>
-        """,
-        unsafe_allow_html=True,
+        """
     )
     st.markdown("#### Detectable conditions")
     for name in CLASS_NAMES:
         color = CLASS_META.get(name, {}).get("color", "#6366f1")
-        st.markdown(
-            f'<div style="display:flex;align-items:center;gap:0.5rem;margin:0.3rem 0;">'
+        html(
+            '<div style="display:flex;align-items:center;gap:0.5rem;margin:0.3rem 0;">'
             f'<span style="width:9px;height:9px;border-radius:50%;background:{color};"></span>'
-            f'<span style="font-size:0.9rem;color:#2b3350;">{name}</span></div>',
-            unsafe_allow_html=True,
+            f'<span style="font-size:0.9rem;color:#2b3350;">{name}</span></div>'
         )
     st.markdown("---")
     st.caption("Educational project only. Not a medical diagnosis.")
 
 
-st.markdown(
+html(
     """
     <div class="hero">
         <span class="badge">AI Dermatology Assistant</span>
@@ -264,18 +261,16 @@ st.markdown(
         <p>Upload a clear, well-lit image of the affected skin area and let our
         MobileNetV2 model provide a fast preliminary assessment.</p>
     </div>
-    """,
-    unsafe_allow_html=True,
+    """
 )
 
-st.markdown(
+html(
     """
     <div class="panel">
         <h3>Step 1 · Upload an image</h3>
         <p class="muted">Supported formats: JPG, JPEG and PNG. Use a close-up, in-focus photo for the best results.</p>
     </div>
-    """,
-    unsafe_allow_html=True,
+    """
 )
 
 uploaded_file = st.file_uploader("Upload skin image", type=["jpg", "jpeg", "png"], label_visibility="collapsed")
@@ -301,10 +296,13 @@ if uploaded_file is not None:
         predicted_class = CLASS_NAMES[top_idx]
         max_prob = float(predictions[top_idx])
 
-        st.markdown(
-            '<div class="panel"><h3>Step 2 · Review the result</h3>'
-            '<p class="muted">AI output combined with the uploaded image for reference.</p></div>',
-            unsafe_allow_html=True,
+        html(
+            """
+            <div class="panel">
+                <h3>Step 2 · Review the result</h3>
+                <p class="muted">AI output combined with the uploaded image for reference.</p>
+            </div>
+            """
         )
 
         col_img, col_res = st.columns([1, 1], gap="large")
@@ -313,7 +311,7 @@ if uploaded_file is not None:
 
         with col_res:
             if max_prob < CONFIDENCE_THRESHOLD:
-                st.markdown(
+                html(
                     f"""
                     <div class="alert">
                         <strong>Uncertain prediction.</strong><br>
@@ -321,12 +319,11 @@ if uploaded_file is not None:
                         <strong>{int(CONFIDENCE_THRESHOLD*100)}%</strong> reliability threshold.
                         Please consult a certified dermatologist for an accurate clinical diagnosis.
                     </div>
-                    """,
-                    unsafe_allow_html=True,
+                    """
                 )
             render_result(predicted_class, max_prob, predictions)
 
-        st.markdown(
+        html(
             f"""
             <div class="panel">
                 <div class="info-grid">
@@ -336,14 +333,12 @@ if uploaded_file is not None:
                     <div class="info-tile"><div class="k">Classes</div><div class="v">{len(CLASS_NAMES)}</div></div>
                 </div>
             </div>
-            """,
-            unsafe_allow_html=True,
+            """
         )
 else:
-    st.markdown(
+    html(
         '<p style="text-align:center;color:#8b93a7;font-size:0.9rem;margin-top:1rem;">'
-        "No image uploaded yet.</p>",
-        unsafe_allow_html=True,
+        "No image uploaded yet.</p>"
     )
 
 st.markdown("---")
