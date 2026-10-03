@@ -9,6 +9,8 @@ from PIL import Image
 from tensorflow.keras.applications.efficientnet import preprocess_input as eff_preprocess_input
 from tensorflow.keras.applications.mobilenet_v2 import preprocess_input as mv2_preprocess_input
 
+BASE_DIR = Path(__file__).resolve().parent
+
 DEFAULT_CLASS_NAMES = ["Acne", "Eczema", "Melanoma", "Normal Skin", "Psoriasis"]
 CONFIDENCE_THRESHOLD = 0.60
 
@@ -35,7 +37,7 @@ CLASS_META = {
 
 
 def load_class_names():
-    override = Path("class_names.json")
+    override = BASE_DIR / "class_names.json"
     if override.exists():
         try:
             names = json.loads(override.read_text())
@@ -253,7 +255,7 @@ html(
 
 @st.cache_resource(show_spinner=False)
 def load_model(path):
-    return tf.keras.models.load_model(path)
+    return tf.keras.models.load_model(str(BASE_DIR / path))
 
 
 def process_image(image, model_input, preprocess_fn):
@@ -423,13 +425,16 @@ def render_comparison(results):
 
 
 AVAILABLE_MODELS = {
-    path: spec for path, spec in MODEL_REGISTRY.items() if Path(path).exists()
+    path: spec
+    for path, spec in MODEL_REGISTRY.items()
+    if (BASE_DIR / path).exists()
 }
 
 if not AVAILABLE_MODELS:
     st.error(
         "No model files were found next to `app.py`. Expected at least one of: "
         + ", ".join(f"`{p}`" for p in MODEL_REGISTRY)
+        + f". Looked in {BASE_DIR}."
     )
     st.stop()
 
@@ -448,12 +453,13 @@ with st.sidebar:
 
     mode = st.radio(
         "Mode",
-        ["Single model", "Compare models"],
+        ["single", "compare"],
+        format_func=lambda m: "Single model" if m == "single" else "Compare models",
         label_visibility="collapsed",
     )
 
     html('<div class="side-label">Select a model</div>')
-    if mode == "Single model":
+    if mode == "single":
         selected_model_path = st.selectbox(
             "CNN Model",
             options=list(AVAILABLE_MODELS),
@@ -474,7 +480,7 @@ with st.sidebar:
         if len(compare_paths) < 2:
             st.warning("Pick at least two models to compare.")
 
-if mode == "Single model":
+if mode == "single":
     MODEL_NAME = AVAILABLE_MODELS[selected_model_path]["label"]
     model_input = None
     with st.spinner(f"Warming up {MODEL_NAME}..."):
@@ -489,7 +495,7 @@ else:
 
 
 with st.sidebar:
-    if mode == "Single model":
+    if mode == "single":
         html(
             f"""
             <div class="model-chip">
@@ -570,7 +576,7 @@ html(
 
 uploaded_file = st.file_uploader("Upload skin image", type=["jpg", "jpeg", "png"], label_visibility="collapsed")
 
-can_analyze = mode == "Single model" or len(compare_paths) >= 2
+can_analyze = mode == "single" or len(compare_paths) >= 2
 
 if uploaded_file is not None and not can_analyze:
     st.info("Select at least two models in the sidebar to run a comparison.")
@@ -582,7 +588,7 @@ if uploaded_file is not None and can_analyze:
 
     if run:
         with st.spinner(f"Analyzing with {MODEL_NAME}..."):
-            if mode == "Single model":
+            if mode == "single":
                 result = predict(selected_model_path, image)
                 st.session_state["prediction"] = {
                     "name": uploaded_file.name,
@@ -605,15 +611,15 @@ if uploaded_file is not None and can_analyze:
         and stored.get("name") == uploaded_file.name
         and stored.get("mode") == mode
         and (
-            (mode == "Single model" and stored.get("path") == selected_model_path)
-            or (mode == "Compare models" and stored.get("paths") == list(compare_paths))
+            (mode == "single" and stored.get("path") == selected_model_path)
+            or (mode == "compare" and stored.get("paths") == list(compare_paths))
         )
     )
 
     if valid:
         results = stored["results"]
 
-        if mode == "Single model":
+        if mode == "single":
             result = results[0]
             predicted_class = result["top_class"]
             max_prob = result["max_prob"]
