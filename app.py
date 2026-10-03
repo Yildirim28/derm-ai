@@ -21,6 +21,21 @@ CLASS_META = {
 }
 
 
+def detect_model_name(model):
+    haystack = " ".join([model.name or ""] + [layer.name for layer in model.layers]).lower()
+    for key, label in (
+        ("efficientnet", "EfficientNet"),
+        ("mobilenet", "MobileNetV2"),
+        ("resnet", "ResNet"),
+        ("densenet", "DenseNet"),
+        ("inception", "Inception"),
+        ("vgg", "VGG"),
+    ):
+        if key in haystack:
+            return label
+    return model.name or "CNN"
+
+
 def load_class_names():
     override = Path("class_names.json")
     if override.exists():
@@ -211,7 +226,7 @@ def render_result(predicted_class, max_prob, predictions):
     html(
         '<div class="panel">'
         "<h3>Probability distribution</h3>"
-        '<p class="muted">Class-wise likelihood produced by the MobileNetV2 model.</p>'
+        f'<p class="muted">Class-wise likelihood produced by the {MODEL_NAME} model.</p>'
         + "".join(bars)
         + "</div>"
     )
@@ -227,14 +242,16 @@ with st.spinner("Warming up the neural network..."):
         st.error(f"Unable to load the model: {exc}")
         st.stop()
 
+MODEL_NAME = detect_model_name(model)
+
 
 with st.sidebar:
     st.markdown("### Derm-AI")
     st.caption("Deep learning based skin disease detection.")
     html(
-        """
+        f"""
         <div class="info-grid">
-            <div class="info-tile"><div class="k">Architecture</div><div class="v">MobileNetV2</div></div>
+            <div class="info-tile"><div class="k">Architecture</div><div class="v">{MODEL_NAME}</div></div>
             <div class="info-tile"><div class="k">Input size</div><div class="v">224 × 224</div></div>
             <div class="info-tile"><div class="k">Classes</div><div class="v">5</div></div>
             <div class="info-tile"><div class="k">Threshold</div><div class="v">60%</div></div>
@@ -254,12 +271,12 @@ with st.sidebar:
 
 
 html(
-    """
+    f"""
     <div class="hero">
         <span class="badge">AI Dermatology Assistant</span>
         <h1>Skin Disease Detection System</h1>
         <p>Upload a clear, well-lit image of the affected skin area and let our
-        MobileNetV2 model provide a fast preliminary assessment.</p>
+        {MODEL_NAME} model provide a fast preliminary assessment.</p>
     </div>
     """
 )
@@ -329,7 +346,7 @@ if uploaded_file is not None:
                 <div class="info-grid">
                     <div class="info-tile"><div class="k">Top prediction</div><div class="v">{predicted_class}</div></div>
                     <div class="info-tile"><div class="k">Confidence</div><div class="v">{max_prob*100:.2f}%</div></div>
-                    <div class="info-tile"><div class="k">Model</div><div class="v">MobileNetV2</div></div>
+                    <div class="info-tile"><div class="k">Model</div><div class="v">{MODEL_NAME}</div></div>
                     <div class="info-tile"><div class="k">Classes</div><div class="v">{len(CLASS_NAMES)}</div></div>
                 </div>
             </div>
