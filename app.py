@@ -212,6 +212,25 @@ html(
     .advice .ico { font-size: 1.1rem; line-height: 1.2; flex: 0 0 auto; }
     .advice strong { color: #0c4a6e; }
 
+    .verdict {
+        border-radius: 16px; padding: 0.95rem 1.15rem; margin-bottom: 1rem; font-size: 0.95rem;
+    }
+    .verdict.ok { background: rgba(16,185,129,0.13); border: 1px solid rgba(16,185,129,0.4); color: #065f46; }
+    .verdict.ok strong { color: #064e3b; }
+    .verdict.warn { background: rgba(245,158,11,0.15); border: 1px solid rgba(245,158,11,0.45); color: #92400e; }
+    .verdict.warn strong { color: #78350f; }
+
+    .cmp-head { margin-bottom: 0.55rem; }
+    .cmp-head .cmp-name { font-size: 1.02rem; font-weight: 800; color: #1e2545; }
+    .cmp-head .cmp-meta { font-size: 0.74rem; color: #8b93a7; }
+
+    .cmp-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; margin-top: 0.4rem; }
+    .cmp-table th {
+        text-align: left; font-size: 0.68rem; letter-spacing: 0.1em; text-transform: uppercase;
+        color: #8b93a7; font-weight: 700; padding: 0.4rem 0.5rem; border-bottom: 1px solid #e6e9f2;
+    }
+    .cmp-table td { padding: 0.5rem; font-weight: 600; color: #2b3350; border-bottom: 1px solid #f1f3fa; }
+
     .stButton > button {
         width: 100%; border: none; border-radius: 14px; padding: 0.8rem 1rem;
         font-weight: 700; font-size: 1rem; color: #ffffff;
@@ -254,34 +273,28 @@ def confidence_band(value):
     return "bad", "Low confidence"
 
 
-def render_result(predicted_class, max_prob, predictions):
-    meta = CLASS_META.get(predicted_class, {"color": "#6366f1", "desc": ""})
-    band, band_label = confidence_band(max_prob)
-    pct = max_prob * 100
+def get_model_input_size(model):
+    shape = getattr(model, "input_shape", None)
+    return shape[1] if shape and len(shape) == 4 else 224
 
-    html(
-        f"""
-        <div class="panel result-card">
-            <div class="label">Predicted condition</div>
-            <div class="dx" style="color:{meta['color']}">{predicted_class}</div>
-            <div class="sub">{meta['desc']}</div>
-            <div class="gauge" style="--p:{pct:.1f}; --g:{meta['color']}">
-                <div class="gauge-inner">
-                    <div class="pct">{pct:.1f}%</div>
-                    <div class="cap">Confidence</div>
-                </div>
-            </div>
-            <div class="chip {band}">{band_label}</div>
-            <div class="advice">
-                <span class="ico">⚠️</span>
-                <span>This is an <strong>AI-generated estimate, not a diagnosis</strong>. The model
-                can be wrong or miss other conditions. Please consult a certified dermatologist
-                or doctor for an accurate medical opinion.</span>
-            </div>
-        </div>
-        """
-    )
 
+def predict(path, image):
+    spec = AVAILABLE_MODELS[path]
+    model = load_model(path)
+    size = get_model_input_size(model)
+    predictions = model.predict(process_image(image, size, spec["preprocess"]), verbose=0)[0]
+    top_idx = int(np.argmax(predictions))
+    return {
+        "model": path,
+        "label": spec["label"],
+        "predictions": predictions,
+        "top_class": CLASS_NAMES[top_idx],
+        "max_prob": float(predictions[top_idx]),
+        "input_size": size,
+    }
+
+
+def bars_html(predictions):
     bars = []
     for name, prob in sorted(zip(CLASS_NAMES, predictions), key=lambda x: x[1], reverse=True):
         color = CLASS_META.get(name, {}).get("color", "#6366f1")
@@ -294,14 +307,119 @@ def render_result(predicted_class, max_prob, predictions):
             f'<div class="bar-fill" style="width:{width:.2f}%;background:linear-gradient(90deg,{color}aa,{color});"></div>'
             "</div></div>"
         )
+    return "".join(bars)
+
+
+def gauge_html(max_prob, color):
+    band, band_label = confidence_band(max_prob)
+    pct = max_prob * 100
+    return (
+        f'<div class="gauge" style="--p:{pct:.1f}; --g:{color}">'
+        '<div class="gauge-inner">'
+        f'<div class="pct">{pct:.1f}%</div>'
+        '<div class="cap">Confidence</div>'
+        "</div></div>"
+        f'<div class="chip {band}">{band_label}</div>'
+    )
+
+
+def render_result(predicted_class, max_prob, predictions):
+    meta = CLASS_META.get(predicted_class, {"color": "#6366f1", "desc": ""})
+    pct = max_prob * 100
+
+    html(
+        f"""
+        <div class="panel result-card">
+            <div class="label">Predicted condition</div>
+            <div class="dx" style="color:{meta['color']}">{predicted_class}</div>
+            <div class="sub">{meta['desc']}</div>
+            {gauge_html(max_prob, meta["color"])}
+            <div class="advice">
+                <span class="ico">⚠️</span>
+                <span>This is an <strong>AI-generated estimate, not a diagnosis</strong>. The model
+                can be wrong or miss other conditions. Please consult a certified dermatologist
+                or doctor for an accurate medical opinion.</span>
+            </div>
+        </div>
+        """
+    )
 
     html(
         '<div class="panel">'
         "<h3>Probability distribution</h3>"
         f'<p class="muted">Class-wise likelihood produced by the {MODEL_NAME} model.</p>'
-        + "".join(bars)
+        + bars_html(predictions)
         + "</div>"
     )
+
+
+def render_comparison(results):
+    top_classes = {r["top_class"] for r in results}
+    agree = len(top_classes) == 1
+    shared = top_classes.pop() if agree else None
+
+    if agree:
+        banner = (
+            f'<div class="verdict ok"><strong>Models agree.</strong> Every model predicted '
+            f"<strong>{shared}</strong>.</div>"
+        )
+    else:
+        banner = (
+            '<div class="verdict warn"><strong>Models disagree.</strong> They predicted '
+            + ", ".join(f"<strong>{c}</strong>" for c in sorted(top_classes))
+            + ". Treat this as an uncertain result and consult a doctor.</div>"
+        )
+    html(banner)
+
+    cols = st.columns(len(results), gap="medium")
+    for col, res in zip(cols, results):
+        with col:
+            meta = CLASS_META.get(res["top_class"], {"color": "#6366f1", "desc": ""})
+            html(
+                f"""
+                <div class="cmp-head">
+                    <div class="cmp-name">{res["label"]}</div>
+                    <div class="cmp-meta">{res["input_size"]} × {res["input_size"]} input</div>
+                </div>
+                """
+            )
+            html(
+                f"""
+                <div class="panel result-card">
+                    <div class="label">Predicted condition</div>
+                    <div class="dx" style="color:{meta['color']};font-size:1.45rem;">{res["top_class"]}</div>
+                    {gauge_html(res["max_prob"], meta["color"])}
+                </div>
+                """
+            )
+            html(
+                '<div class="panel">'
+                "<h3>Distribution</h3>"
+                + bars_html(res["predictions"])
+                + "</div>"
+            )
+
+    if len(results) > 1:
+        html(
+            '<div class="panel">'
+            "<h3>Head-to-head</h3>"
+            '<p class="muted">Top prediction and confidence from each model.</p>'
+            '<table class="cmp-table"><thead><tr><th>Model</th><th>Top prediction</th>'
+            "<th>Confidence</th></tr></thead><tbody>"
+            + "".join(
+                f"<tr><td>{r['label']}</td>"
+                f'<td style="color:{CLASS_META.get(r["top_class"], {}).get("color", "#6366f1")}">'
+                f'{r["top_class"]}</td>'
+                f'<td>{r["max_prob"]*100:.2f}%</td></tr>'
+                for r in results
+            )
+            + "</tbody></table>"
+            '<div class="advice" style="margin-top:1rem;">'
+            '<span class="ico">⚠️</span><span>A disagreement between models means the prediction '
+            "is <strong>not reliable</strong>. A higher confidence score does not mean a correct "
+            "diagnosis. Please see a certified dermatologist or doctor.</span></div>"
+            "</div>"
+        )
 
 
 AVAILABLE_MODELS = {
@@ -328,52 +446,92 @@ with st.sidebar:
         """
     )
 
-    html('<div class="side-label">Select a model</div>')
-    selected_model_path = st.selectbox(
-        "CNN Model",
-        options=list(AVAILABLE_MODELS),
-        format_func=lambda p: AVAILABLE_MODELS[p]["label"],
-        index=0,
+    mode = st.radio(
+        "Mode",
+        ["Single model", "Compare models"],
         label_visibility="collapsed",
     )
 
-MODEL_SPEC = AVAILABLE_MODELS[selected_model_path]
-MODEL_NAME = MODEL_SPEC["label"]
+    html('<div class="side-label">Select a model</div>')
+    if mode == "Single model":
+        selected_model_path = st.selectbox(
+            "CNN Model",
+            options=list(AVAILABLE_MODELS),
+            format_func=lambda p: AVAILABLE_MODELS[p]["label"],
+            index=0,
+            label_visibility="collapsed",
+        )
+        compare_paths = []
+    else:
+        selected_model_path = None
+        compare_paths = st.multiselect(
+            "Compare models",
+            options=list(AVAILABLE_MODELS),
+            default=list(AVAILABLE_MODELS),
+            format_func=lambda p: AVAILABLE_MODELS[p]["label"],
+            label_visibility="collapsed",
+        )
+        if len(compare_paths) < 2:
+            st.warning("Pick at least two models to compare.")
 
-with st.spinner(f"Warming up {MODEL_NAME}..."):
-    try:
-        model = load_model(selected_model_path)
-    except Exception as exc:
-        st.error(f"Unable to load `{selected_model_path}`: {exc}")
-        st.stop()
-
-model_input = model.input_shape[1] if getattr(model, "input_shape", None) else 224
+if mode == "Single model":
+    MODEL_NAME = AVAILABLE_MODELS[selected_model_path]["label"]
+    model_input = None
+    with st.spinner(f"Warming up {MODEL_NAME}..."):
+        try:
+            model_input = get_model_input_size(load_model(selected_model_path))
+        except Exception as exc:
+            st.error(f"Unable to load `{selected_model_path}`: {exc}")
+            st.stop()
+else:
+    MODEL_NAME = " + ".join(AVAILABLE_MODELS[p]["label"] for p in compare_paths) or "comparison"
+    model_input = None
 
 
 with st.sidebar:
-    html(
-        f"""
-        <div class="model-chip">
-            <div>
-                <div class="lbl">Active model</div>
-                <div class="nm">{MODEL_NAME}</div>
+    if mode == "Single model":
+        html(
+            f"""
+            <div class="model-chip">
+                <div>
+                    <div class="lbl">Active model</div>
+                    <div class="nm">{MODEL_NAME}</div>
+                </div>
+                <div style="font-size:1.3rem;">🧠</div>
             </div>
-            <div style="font-size:1.3rem;">🧠</div>
-        </div>
-        """
-    )
-
-    html('<div class="side-label">Model details</div>')
-    html(
-        f"""
-        <div class="side-grid">
-            <div class="info-tile"><div class="k">Input</div><div class="v">{model_input} × {model_input}</div></div>
-            <div class="info-tile"><div class="k">Classes</div><div class="v">{len(CLASS_NAMES)}</div></div>
-            <div class="info-tile"><div class="k">Threshold</div><div class="v">{int(CONFIDENCE_THRESHOLD*100)}%</div></div>
-            <div class="info-tile"><div class="k">Framework</div><div class="v">TensorFlow</div></div>
-        </div>
-        """
-    )
+            """
+        )
+        html('<div class="side-label">Model details</div>')
+        html(
+            f"""
+            <div class="side-grid">
+                <div class="info-tile"><div class="k">Input</div><div class="v">{model_input} × {model_input}</div></div>
+                <div class="info-tile"><div class="k">Classes</div><div class="v">{len(CLASS_NAMES)}</div></div>
+                <div class="info-tile"><div class="k">Threshold</div><div class="v">{int(CONFIDENCE_THRESHOLD*100)}%</div></div>
+                <div class="info-tile"><div class="k">Framework</div><div class="v">TensorFlow</div></div>
+            </div>
+            """
+        )
+    else:
+        html(
+            f"""
+            <div class="model-chip">
+                <div>
+                    <div class="lbl">Comparing</div>
+                    <div class="nm">{len(compare_paths)} models</div>
+                </div>
+                <div style="font-size:1.3rem;">⚖️</div>
+            </div>
+            """
+        )
+        html('<div class="side-label">Models in comparison</div>')
+        for path in compare_paths:
+            color = CLASS_META.get(CLASS_NAMES[0], {}).get("color", "#6366f1")
+            html(
+                '<div class="cond">'
+                f'<span class="dot" style="background:{color};"></span>'
+                f'<span class="txt">{AVAILABLE_MODELS[path]["label"]}</span></div>'
+            )
 
     html('<div class="side-label">Detectable conditions</div>')
     for name in CLASS_NAMES:
@@ -412,70 +570,120 @@ html(
 
 uploaded_file = st.file_uploader("Upload skin image", type=["jpg", "jpeg", "png"], label_visibility="collapsed")
 
-if uploaded_file is not None:
+can_analyze = mode == "Single model" or len(compare_paths) >= 2
+
+if uploaded_file is not None and not can_analyze:
+    st.info("Select at least two models in the sidebar to run a comparison.")
+
+if uploaded_file is not None and can_analyze:
     image = Image.open(uploaded_file)
 
     run = st.button("Analyze Image", type="primary", use_container_width=True)
 
     if run:
-        with st.spinner(f"Analyzing image features with {MODEL_NAME}..."):
-            predictions = model.predict(
-                process_image(image, model_input, MODEL_SPEC["preprocess"]), verbose=0
-            )[0]
-        st.session_state["prediction"] = {
-            "name": uploaded_file.name,
-            "model": selected_model_path,
-            "predictions": predictions.tolist(),
-        }
+        with st.spinner(f"Analyzing with {MODEL_NAME}..."):
+            if mode == "Single model":
+                result = predict(selected_model_path, image)
+                st.session_state["prediction"] = {
+                    "name": uploaded_file.name,
+                    "mode": "single",
+                    "path": selected_model_path,
+                    "results": [result],
+                }
+            else:
+                results = [predict(path, image) for path in compare_paths]
+                st.session_state["prediction"] = {
+                    "name": uploaded_file.name,
+                    "mode": "compare",
+                    "paths": list(compare_paths),
+                    "results": results,
+                }
 
     stored = st.session_state.get("prediction")
-
-    if stored and stored.get("name") == uploaded_file.name and stored.get("model") == selected_model_path:
-        predictions = np.array(stored["predictions"])
-        top_idx = int(np.argmax(predictions))
-        predicted_class = CLASS_NAMES[top_idx]
-        max_prob = float(predictions[top_idx])
-
-        html(
-            """
-            <div class="panel">
-                <h3>Step 2 · Review the result</h3>
-                <p class="muted">AI output combined with the uploaded image for reference.</p>
-            </div>
-            """
+    valid = (
+        stored
+        and stored.get("name") == uploaded_file.name
+        and stored.get("mode") == mode
+        and (
+            (mode == "Single model" and stored.get("path") == selected_model_path)
+            or (mode == "Compare models" and stored.get("paths") == list(compare_paths))
         )
+    )
 
-        col_img, col_res = st.columns([1, 1], gap="large")
-        with col_img:
-            st.image(image, caption="Uploaded skin image", use_container_width=True)
+    if valid:
+        results = stored["results"]
 
-        with col_res:
-            if max_prob < CONFIDENCE_THRESHOLD:
+        if mode == "Single model":
+            result = results[0]
+            predicted_class = result["top_class"]
+            max_prob = result["max_prob"]
+            predictions = result["predictions"]
+
+            html(
+                """
+                <div class="panel">
+                    <h3>Step 2 · Review the result</h3>
+                    <p class="muted">AI output combined with the uploaded image for reference.</p>
+                </div>
+                """
+            )
+
+            col_img, col_res = st.columns([1, 1], gap="large")
+            with col_img:
+                st.image(image, caption="Uploaded skin image", use_container_width=True)
+
+            with col_res:
+                if max_prob < CONFIDENCE_THRESHOLD:
+                    html(
+                        f"""
+                        <div class="alert">
+                            <strong>Uncertain prediction.</strong><br>
+                            The confidence is <strong>{max_prob*100:.2f}%</strong>, below the
+                            <strong>{int(CONFIDENCE_THRESHOLD*100)}%</strong> reliability threshold.
+                            Please consult a certified dermatologist for an accurate clinical diagnosis.
+                        </div>
+                        """
+                    )
+                render_result(predicted_class, max_prob, predictions)
+
+            html(
+                f"""
+                <div class="panel">
+                    <div class="info-grid">
+                        <div class="info-tile"><div class="k">Top prediction</div><div class="v">{predicted_class}</div></div>
+                        <div class="info-tile"><div class="k">Confidence</div><div class="v">{max_prob*100:.2f}%</div></div>
+                        <div class="info-tile"><div class="k">Model</div><div class="v">{MODEL_NAME}</div></div>
+                        <div class="info-tile"><div class="k">Classes</div><div class="v">{len(CLASS_NAMES)}</div></div>
+                    </div>
+                </div>
+                """
+            )
+        else:
+            html(
+                """
+                <div class="panel">
+                    <h3>Step 2 · Compare the results</h3>
+                    <p class="muted">Every selected model evaluated the same image, shown side by side.</p>
+                </div>
+                """
+            )
+
+            col_img, col_res = st.columns([1, 2], gap="large")
+            with col_img:
+                st.image(image, caption="Uploaded skin image", use_container_width=True)
+            with col_res:
                 html(
-                    f"""
-                    <div class="alert">
-                        <strong>Uncertain prediction.</strong><br>
-                        The confidence is <strong>{max_prob*100:.2f}%</strong>, below the
-                        <strong>{int(CONFIDENCE_THRESHOLD*100)}%</strong> reliability threshold.
-                        Please consult a certified dermatologist for an accurate clinical diagnosis.
+                    """
+                    <div class="panel">
+                        <h3>How to read this</h3>
+                        <p class="muted">Compare each model's top prediction and confidence. When the
+                        models disagree, the result is unreliable and must be confirmed by a doctor.</p>
                     </div>
                     """
                 )
-            render_result(predicted_class, max_prob, predictions)
 
-        html(
-            f"""
-            <div class="panel">
-                <div class="info-grid">
-                    <div class="info-tile"><div class="k">Top prediction</div><div class="v">{predicted_class}</div></div>
-                    <div class="info-tile"><div class="k">Confidence</div><div class="v">{max_prob*100:.2f}%</div></div>
-                    <div class="info-tile"><div class="k">Model</div><div class="v">{MODEL_NAME}</div></div>
-                    <div class="info-tile"><div class="k">Classes</div><div class="v">{len(CLASS_NAMES)}</div></div>
-                </div>
-            </div>
-            """
-        )
-else:
+            render_comparison(results)
+elif uploaded_file is None:
     html(
         '<p style="text-align:center;color:#8b93a7;font-size:0.9rem;margin-top:1rem;">'
         "No image uploaded yet.</p>"
