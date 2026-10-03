@@ -1,221 +1,87 @@
-"""
-Skin Lesion Classification - Streamlit Web Application
-======================================================
-
-This app serves the MobileNetV2 model that was fine-tuned during the
-optimization stage and saved as ``mobilenet_v2_optimized.h5``.
-
-Workflow
---------
-1. The user uploads a skin image.
-2. The image is resized to 224 x 224 (the model input size, taken from the
-   saved model's InputLayer: ``[None, 224, 224, 3]``).
-3. The *exact* preprocessing used during training is applied:
-   ``keras.applications.mobilenet_v2.preprocess_input``
-   (i.e. pixels scaled from [0, 255] to [-1, 1]).
-4. The model predicts a probability for each of the five classes.
-5. The app displays the predicted class, the confidence score and the full
-   probability distribution for all five classes.
-6. A 60% confidence threshold is used. If the top confidence is below the
-   threshold, an uncertainty message is shown and a dermatologist
-   consultation is recommended.
-"""
-
-import json
-import os
-
-import numpy as np
-import pandas as pd
 import streamlit as st
-from PIL import Image
-
+import numpy as np
 import tensorflow as tf
+from PIL import Image
 from tensorflow.keras.applications.mobilenet_v2 import preprocess_input
 
-# --------------------------------------------------------------------------- #
-# Configuration
-# --------------------------------------------------------------------------- #
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-MODEL_PATH = os.path.join(BASE_DIR, "mobilenet_v2_optimized.h5")
-CLASS_NAMES_PATH = os.path.join(BASE_DIR, "class_names.json")
+# ==========================================
+# 1. PAGE CONFIG & STYLING
+# ==========================================
+st.set_page_config(
+    page_title="AI Skin Disease Classifier",
+    page_icon="🩺",
+    layout="centered"
+)
 
-# Input size the model was trained on (from the saved InputLayer).
-IMG_SIZE = (224, 224)
+st.title("🩺 AI-Based Skin Disease Classification System")
+st.write("Upload a clear skin lesion image to get an AI-powered preliminary assessment using our optimized MobileNetV2 model.")
 
-# Below this top-class probability the prediction is treated as uncertain.
-CONFIDENCE_THRESHOLD = 0.60
-
-# The order MUST match the label order used when the model was trained
-# (i.e. the sorted class order of the training generator / label encoder).
-#
-# You can override this WITHOUT editing code by creating ``class_names.json``
-# next to this file, e.g.:
-#   ["Actinic keratosis", "Basal cell carcinoma", "Benign keratosis",
-#    "Melanoma", "Melanocytic nevus"]
-CLASS_NAMES = ['Acne', 'Eczema', 'Melanoma', 'Normal Skin', 'Psoriasis']
-
-
-# --------------------------------------------------------------------------- #
-# Resource loaders (cached so they run only once)
-# --------------------------------------------------------------------------- #
-def load_class_names():
-    """Return the ordered class labels (from JSON if present, else default)."""
-    if os.path.exists(CLASS_NAMES_PATH):
-        try:
-            with open(CLASS_NAMES_PATH, "r", encoding="utf-8") as handle:
-                names = json.load(handle)
-            if isinstance(names, list) and len(names) == len(DEFAULT_CLASS_NAMES):
-                return [str(name) for name in names]
-        except (ValueError, OSError):
-            # Fall back to the defaults if the file is unreadable/invalid.
-            pass
-    return DEFAULT_CLASS_NAMES
-
-
-@st.cache_resource(show_spinner="Loading the trained model ...")
+# ==========================================
+# 2. LOAD MODEL (Cached for fast performance)
+# ==========================================
+@st.cache_resource
 def load_model():
-    """Load the HDF5 Keras model once and cache it.
+    return tf.keras.models.load_model('mobilenet_v2_optimized.h5')
 
-    ``compile=False`` is used because only inference is required; this avoids
-    depending on the saved optimizer / training configuration.
-    """
-    return tf.keras.models.load_model(MODEL_PATH, compile=False)
-
-
-# --------------------------------------------------------------------------- #
-# Preprocessing + inference
-# --------------------------------------------------------------------------- #
-def preprocess_image(image: Image.Image) -> np.ndarray:
-    """Resize and preprocess a PIL image into a (1, 224, 224, 3) batch.
-
-    Matches the training-time pipeline: RGB -> 224x224 -> float32 in [0, 255]
-    -> MobileNetV2 ``preprocess_input`` (scaled to [-1, 1]).
-    """
-    image = image.convert("RGB").resize(IMG_SIZE, Image.BILINEAR)
-    array = np.asarray(image, dtype=np.float32)          # [0, 255]
-    array = preprocess_input(array)                       # [-1, 1]
-    return np.expand_dims(array, axis=0)                  # (1, 224, 224, 3)
-
-
-def predict_probabilities(model, image: Image.Image) -> np.ndarray:
-    """Return the softmax probability vector for a single image."""
-    batch = preprocess_image(image)
-    probabilities = model.predict(batch, verbose=0)[0]
-    return np.asarray(probabilities, dtype=np.float64)
-
-
-# --------------------------------------------------------------------------- #
-# UI
-# --------------------------------------------------------------------------- #
-def render_prediction(probabilities: np.ndarray, class_names):
-    """Render the predicted class, confidence and probability distribution."""
-    predicted_index = int(np.argmax(probabilities))
-    confidence = float(probabilities[predicted_index])
-    predicted_class = class_names[predicted_index]
-
-    st.subheader("Prediction")
-
-    if confidence < CONFIDENCE_THRESHOLD:
-        st.error(
-            f"**Uncertain result.** The model's best guess is "
-            f"*{predicted_class}* with only **{confidence:.1%}** confidence, "
-            f"which is below the {CONFIDENCE_THRESHOLD:.0%} threshold."
-        )
-        st.warning(
-            "The model is not confident enough to give a reliable answer for "
-            "this image. **Please consult a dermatologist** for a proper "
-            "clinical assessment. This tool is for educational purposes only "
-            "and must not be used as a medical diagnosis."
-        )
-    else:
-        st.success(
-            f"Predicted class: **{predicted_class}** "
-            f"(confidence **{confidence:.1%}**)"
-        )
-
-    metric_cols = st.columns(2)
-    metric_cols[0].metric("Predicted class", predicted_class)
-    metric_cols[1].metric("Confidence score", f"{confidence:.1%}")
-
-    st.subheader("Probability distribution (all 5 classes)")
-    distribution = pd.DataFrame(
-        {"Probability": probabilities}, index=class_names
-    )
-    st.bar_chart(distribution)
-    st.dataframe(distribution.style.format("{:.2%}"))
-
-
-def main():
-    st.set_page_config(
-        page_title="Skin Lesion Classifier",
-        page_icon="\U0001F52C",
-        layout="wide",
-    )
-
-    class_names = load_class_names()
-
-    st.title("\U0001F52C Skin Lesion Classification")
-    st.write(
-        "Upload a skin image and the fine-tuned **MobileNetV2** model will "
-        "classify it into one of the five lesion categories and report the "
-        "confidence of its prediction."
-    )
-
-    # ----- Sidebar ---------------------------------------------------------- #
-    with st.sidebar:
-        st.header("About")
-        st.markdown(
-            f"- **Model:** MobileNetV2 (fine-tuned)\n"
-            f"- **Input size:** {IMG_SIZE[0]} x {IMG_SIZE[1]} px\n"
-            f"- **Classes:** {len(class_names)}\n"
-            f"- **Confidence threshold:** {CONFIDENCE_THRESHOLD:.0%}"
-        )
-        st.markdown("**Classes**")
-        for index, name in enumerate(class_names):
-            st.markdown(f"{index}: {name}")
-
-        st.divider()
-        st.caption(
-            "For educational/research use only. This application does not "
-            "provide a medical diagnosis. Always consult a qualified "
-            "dermatologist about skin concerns."
-        )
-
-    # ----- Model check ------------------------------------------------------ #
-    if not os.path.exists(MODEL_PATH):
-        st.error(
-            f"Model file not found: `{MODEL_PATH}`. "
-            "Place `mobilenet_v2_optimized.h5` next to `app.py`."
-        )
+with st.spinner("Loading AI Model... Please wait."):
+    try:
+        model = load_model()
+    except Exception as e:
+        st.error(f"Error loading model file: {e}")
         st.stop()
 
-    model = load_model()
+CLASS_NAMES = ['Acne', 'Eczema', 'Melanoma', 'Normal Skin', 'Psoriasis']
 
-    # ----- Upload ----------------------------------------------------------- #
-    uploaded_file = st.file_uploader(
-        "Choose a skin image",
-        type=["jpg", "jpeg", "png", "bmp", "webp"],
-        help="Supported formats: JPG, JPEG, PNG, BMP, WEBP.",
-    )
+# ==========================================
+# 3. IMAGE PREPROCESSING FUNCTION
+# ==========================================
+def process_image(img):
+    img = img.convert('RGB')
+    img = img.resize((224, 224))
+    img_array = tf.keras.preprocessing.image.img_to_array(img)
+    img_array = np.expand_dims(img_array, axis=0)
+    return preprocess_input(img_array)
 
-    if uploaded_file is None:
-        st.info("Upload an image to get a prediction.")
-        return
+# ==========================================
+# 4. USER INTERFACE & PREDICTION
+# ==========================================
+uploaded_file = st.file_uploader("Choose a skin image...", type=["jpg", "png", "jpeg"])
 
+if uploaded_file is not None:
     image = Image.open(uploaded_file)
+    st.image(image, caption='Uploaded Skin Image', use_column_width=True)
+    
+    if st.button("Run Classification", type="primary"):
+        with st.spinner("Analyzing image features..."):
+            processed_img = process_image(image)
+            predictions = model.predict(processed_img)[0]
+            
+            max_prob = np.max(predictions)
+            predicted_class = CLASS_NAMES[np.argmax(predictions)]
+            
+            st.divider()
+            
+            # ==========================================
+            # 5. UNCERTAINTY HANDLING (60% Threshold)
+            # ==========================================
+            if max_prob < 0.60:
+                st.warning("⚠️ **Uncertain Prediction Detected**")
+                st.write(f"The model confidence is **{max_prob*100:.2f}%**, which is below our **60% reliability threshold**.")
+                st.info("💡 **Recommendation:** As the model is uncertain, please consult a certified dermatologist for an accurate clinical diagnosis.")
+            else:
+                st.success(f"### Predicted Condition: **{predicted_class}**")
+                st.metric(label="Confidence Score", value=f"{max_prob*100:.2f}%")
+            
+            # ==========================================
+            # 6. PROBABILITY DISTRIBUTION BREAKDOWN
+            # ==========================================
+            st.write("#### Detailed Probability Distribution:")
+            for i, class_name in enumerate(CLASS_NAMES):
+                prob = predictions[i] * 100
+                st.progress(int(round(prob)), text=f"{class_name}: {prob:.2f}%")
 
-    left, right = st.columns([1, 1])
-    with left:
-        st.subheader("Uploaded image")
-        st.image(image, caption="Resized to 224 x 224 before prediction",
-                 width=300)
-
-    with right:
-        with st.spinner("Running inference ..."):
-            probabilities = predict_probabilities(model, image)
-        render_prediction(probabilities, class_names)
-
-
-if __name__ == "__main__":
-    main()
-
+# ==========================================
+# 7. FOOTER & DISCLAIMER
+# ==========================================
+st.markdown("---")
+st.caption("Disclaimer: This tool is developed as a final-year academic project for educational purposes only and is not a substitute for professional medical advice, diagnosis, or treatment.")
