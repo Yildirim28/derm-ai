@@ -147,6 +147,73 @@ html(
     .info-tile .k { font-size: 0.68rem; letter-spacing: 0.1em; text-transform: uppercase; color: #8b93a7; font-weight: 700; }
     .info-tile .v { font-size: 1.02rem; font-weight: 700; color: #1e2545; margin-top: 0.15rem; }
 
+    /* Sidebar: force the light surface so hardcoded text colors stay readable */
+    [data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #fbfcff 0%, #f1f3fd 100%);
+        border-right: 1px solid rgba(99,102,241,0.16);
+    }
+    [data-testid="stSidebar"] .stMarkdown, [data-testid="stSidebar"] p,
+    [data-testid="stSidebar"] span, [data-testid="stSidebar"] div { color: #1e2545; }
+    [data-testid="stSidebar"] [data-testid="stCaptionContainer"],
+    [data-testid="stSidebar"] .stCaption { color: #6b7286; }
+    [data-testid="stSidebar"] hr { border-color: rgba(99,102,241,0.18); }
+    [data-testid="stSidebar"] [data-testid="stVerticalBlock"] { gap: 0.7rem; }
+    [data-testid="stSidebar"] [data-testid="stElementContainer"] { margin-bottom: 0; }
+
+    .brand { display: flex; align-items: center; gap: 0.7rem; margin-bottom: 1rem; }
+    .brand .logo {
+        width: 44px; height: 44px; flex: 0 0 44px; border-radius: 14px;
+        display: flex; align-items: center; justify-content: center; font-size: 1.25rem;
+        background: linear-gradient(135deg, #4f46e5, #8b5cf6 55%, #ec4899);
+        box-shadow: 0 12px 24px -12px rgba(99,102,241,0.95);
+    }
+    .brand .txt .name { font-size: 1.1rem; font-weight: 800; color: #1e2545; line-height: 1.15; }
+    .brand .txt .tag { font-size: 0.74rem; color: #6b7286; }
+
+    .model-chip {
+        display: flex; align-items: center; justify-content: space-between; gap: 0.6rem;
+        background: #ffffff; border: 1px solid rgba(99,102,241,0.22); border-radius: 14px;
+        padding: 0.7rem 0.85rem; margin-bottom: 0.9rem;
+        box-shadow: 0 10px 24px -18px rgba(30,41,90,0.7);
+    }
+    .model-chip .lbl { font-size: 0.64rem; letter-spacing: 0.12em; text-transform: uppercase; color: #8b93a7; font-weight: 700; }
+    .model-chip .nm { font-size: 0.95rem; font-weight: 800; color: #4f46e5; }
+
+    [data-testid="stSidebar"] .side-label {
+        font-size: 0.66rem; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase;
+        color: #8b93a7; margin: 0.2rem 0 0.55rem;
+    }
+
+    .side-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 0.9rem; }
+    .side-grid .info-tile { padding: 0.6rem 0.7rem; }
+    .side-grid .info-tile .v { font-size: 0.92rem; }
+
+    .cond {
+        display: flex; align-items: center; gap: 0.6rem; padding: 0.5rem 0.7rem;
+        border-radius: 12px; background: rgba(255,255,255,0.85);
+        border: 1px solid rgba(99,102,241,0.12); margin-bottom: 0.4rem;
+        box-shadow: 0 6px 14px -12px rgba(30,41,90,0.75);
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    .cond:hover { transform: translateX(2px); box-shadow: 0 8px 16px -12px rgba(30,41,90,0.85); }
+    .cond .dot { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 9px; }
+    .cond .txt { font-size: 0.86rem; font-weight: 600; color: #2b3350; }
+
+    [data-testid="stSidebar"] .side-note {
+        background: rgba(245,158,11,0.10); border: 1px solid rgba(245,158,11,0.32);
+        border-radius: 14px; padding: 0.65rem 0.8rem; font-size: 0.78rem; color: #92400e;
+    }
+    [data-testid="stSidebar"] .side-note strong { color: #78350f; }
+
+    .advice {
+        display: flex; gap: 0.7rem; align-items: flex-start; text-align: left;
+        margin-top: 1.05rem; padding: 0.85rem 1rem; border-radius: 16px;
+        background: rgba(14,165,233,0.10); border: 1px solid rgba(14,165,233,0.32);
+        color: #075985; font-size: 0.87rem; line-height: 1.45;
+    }
+    .advice .ico { font-size: 1.1rem; line-height: 1.2; flex: 0 0 auto; }
+    .advice strong { color: #0c4a6e; }
+
     .stButton > button {
         width: 100%; border: none; border-radius: 14px; padding: 0.8rem 1rem;
         font-weight: 700; font-size: 1rem; color: #ffffff;
@@ -206,6 +273,12 @@ def render_result(predicted_class, max_prob, predictions):
                 </div>
             </div>
             <div class="chip {band}">{band_label}</div>
+            <div class="advice">
+                <span class="ico">⚠️</span>
+                <span>This is an <strong>AI-generated estimate, not a diagnosis</strong>. The model
+                can be wrong or miss other conditions. Please consult a certified dermatologist
+                or doctor for an accurate medical opinion.</span>
+            </div>
         </div>
         """
     )
@@ -246,28 +319,55 @@ MODEL_NAME = detect_model_name(model)
 
 
 with st.sidebar:
-    st.markdown("### Derm-AI")
-    st.caption("Deep learning based skin disease detection.")
     html(
-        f"""
-        <div class="info-grid">
-            <div class="info-tile"><div class="k">Architecture</div><div class="v">{MODEL_NAME}</div></div>
-            <div class="info-tile"><div class="k">Input size</div><div class="v">224 × 224</div></div>
-            <div class="info-tile"><div class="k">Classes</div><div class="v">5</div></div>
-            <div class="info-tile"><div class="k">Threshold</div><div class="v">60%</div></div>
+        """
+        <div class="brand">
+            <div class="logo">🩺</div>
+            <div class="txt">
+                <div class="name">Derm-AI</div>
+                <div class="tag">Deep learning skin disease detection</div>
+            </div>
         </div>
         """
     )
-    st.markdown("#### Detectable conditions")
+
+    html(
+        f"""
+        <div class="model-chip">
+            <div>
+                <div class="lbl">CNN Model</div>
+                <div class="nm">{MODEL_NAME}</div>
+            </div>
+            <div style="font-size:1.3rem;">🧠</div>
+        </div>
+        """
+    )
+
+    html('<div class="side-label">Model details</div>')
+    html(
+        f"""
+        <div class="side-grid">
+            <div class="info-tile"><div class="k">Input</div><div class="v">224 × 224</div></div>
+            <div class="info-tile"><div class="k">Classes</div><div class="v">{len(CLASS_NAMES)}</div></div>
+            <div class="info-tile"><div class="k">Threshold</div><div class="v">{int(CONFIDENCE_THRESHOLD*100)}%</div></div>
+            <div class="info-tile"><div class="k">Framework</div><div class="v">TensorFlow</div></div>
+        </div>
+        """
+    )
+
+    html('<div class="side-label">Detectable conditions</div>')
     for name in CLASS_NAMES:
         color = CLASS_META.get(name, {}).get("color", "#6366f1")
         html(
-            '<div style="display:flex;align-items:center;gap:0.5rem;margin:0.3rem 0;">'
-            f'<span style="width:9px;height:9px;border-radius:50%;background:{color};"></span>'
-            f'<span style="font-size:0.9rem;color:#2b3350;">{name}</span></div>'
+            '<div class="cond">'
+            f'<span class="dot" style="background:{color};"></span>'
+            f'<span class="txt">{name}</span></div>'
         )
-    st.markdown("---")
-    st.caption("Educational project only. Not a medical diagnosis.")
+
+    html(
+        '<div class="side-note"><strong>Educational project only.</strong> '
+        "This tool does not provide a medical diagnosis.</div>"
+    )
 
 
 html(
