@@ -52,13 +52,7 @@ CONFIDENCE_THRESHOLD = 0.60
 # next to this file, e.g.:
 #   ["Actinic keratosis", "Basal cell carcinoma", "Benign keratosis",
 #    "Melanoma", "Melanocytic nevus"]
-DEFAULT_CLASS_NAMES = [
-    "Actinic keratosis",
-    "Basal cell carcinoma",
-    "Benign keratosis",
-    "Melanoma",
-    "Melanocytic nevus",
-]
+CLASS_NAMES = ['Acne', 'Eczema', 'Melanoma', 'Normal Skin', 'Psoriasis']
 
 
 # --------------------------------------------------------------------------- #
