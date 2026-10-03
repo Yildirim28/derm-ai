@@ -163,7 +163,7 @@ with col2:
 st.markdown("---")
 st.markdown(
     "<div style='text-align: center; color: #94a3b8; font-size: 0.85rem;'>"
-    "<b>Disclaimer:</b> DermAI is developed as an academic Final Year Design Project (FYDP). "
+    "<b>Disclaimer:</b> DermAI is developed as an academic Digital Image Processing Course. "
     "It is intended solely for educational and research purposes and must not replace formal medical advice."
     "</div>", 
     unsafe_allow_html=True
