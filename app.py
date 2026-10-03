@@ -8,7 +8,7 @@ import tensorflow as tf
 from PIL import Image
 from tensorflow.keras.applications.mobilenet_v2 import preprocess_input
 
-MODEL_PATH = "skin_disease_mobilenetv2.h5"
+MODEL_PATH = "mobilenet_v2_optimized.h5"
 DEFAULT_CLASS_NAMES = ["Acne", "Eczema", "Melanoma", "Normal Skin", "Psoriasis"]
 CONFIDENCE_THRESHOLD = 0.60
 
