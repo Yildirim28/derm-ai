@@ -6,11 +6,24 @@ import numpy as np
 import streamlit as st
 import tensorflow as tf
 from PIL import Image
-from tensorflow.keras.applications.mobilenet_v2 import preprocess_input
+from tensorflow.keras.applications.efficientnet import preprocess_input as eff_preprocess_input
+from tensorflow.keras.applications.mobilenet_v2 import preprocess_input as mv2_preprocess_input
 
-MODEL_PATH = "mobilenet_v2_optimized.h5"
 DEFAULT_CLASS_NAMES = ["Acne", "Eczema", "Melanoma", "Normal Skin", "Psoriasis"]
 CONFIDENCE_THRESHOLD = 0.60
+
+MODEL_REGISTRY = {
+    "mobilenet_v2_optimized.h5": {
+        "label": "MobileNetV2",
+        "note": "Lightweight and fast",
+        "preprocess": mv2_preprocess_input,
+    },
+    "efficientnet_b4_baseline.h5": {
+        "label": "EfficientNetB4",
+        "note": "Deeper, higher accuracy",
+        "preprocess": eff_preprocess_input,
+    },
+}
 
 CLASS_META = {
     "Acne": {"color": "#6366f1", "desc": "Inflammatory skin condition affecting hair follicles and sebaceous glands."},
@@ -19,21 +32,6 @@ CLASS_META = {
     "Normal Skin": {"color": "#10b981", "desc": "Healthy skin with no significant lesions detected."},
     "Psoriasis": {"color": "#f59e0b", "desc": "Autoimmune condition producing raised, scaly patches on the skin."},
 }
-
-
-def detect_model_name(model):
-    haystack = " ".join([model.name or ""] + [layer.name for layer in model.layers]).lower()
-    for key, label in (
-        ("efficientnet", "EfficientNet"),
-        ("mobilenet", "MobileNetV2"),
-        ("resnet", "ResNet"),
-        ("densenet", "DenseNet"),
-        ("inception", "Inception"),
-        ("vgg", "VGG"),
-    ):
-        if key in haystack:
-            return label
-    return model.name or "CNN"
 
 
 def load_class_names():
@@ -239,12 +237,13 @@ def load_model(path):
     return tf.keras.models.load_model(path)
 
 
-def process_image(image):
+def process_image(image, model_input, preprocess_fn):
+    size = (model_input, model_input)
     image = image.convert("RGB")
-    image = image.resize((224, 224))
+    image = image.resize(size)
     array = tf.keras.preprocessing.image.img_to_array(image)
     array = np.expand_dims(array, axis=0)
-    return preprocess_input(array)
+    return preprocess_fn(array)
 
 
 def confidence_band(value):
@@ -305,18 +304,16 @@ def render_result(predicted_class, max_prob, predictions):
     )
 
 
-with st.spinner("Warming up the neural network..."):
-    if not Path(MODEL_PATH).exists():
-        st.error(f"Model file `{MODEL_PATH}` was not found. Place it next to `app.py`.")
-        st.stop()
-    try:
-        model = load_model(MODEL_PATH)
-    except Exception as exc:
-        st.error(f"Unable to load the model: {exc}")
-        st.stop()
+AVAILABLE_MODELS = {
+    path: spec for path, spec in MODEL_REGISTRY.items() if Path(path).exists()
+}
 
-MODEL_NAME = detect_model_name(model)
-
+if not AVAILABLE_MODELS:
+    st.error(
+        "No model files were found next to `app.py`. Expected at least one of: "
+        + ", ".join(f"`{p}`" for p in MODEL_REGISTRY)
+    )
+    st.stop()
 
 with st.sidebar:
     html(
@@ -331,11 +328,34 @@ with st.sidebar:
         """
     )
 
+    html('<div class="side-label">Select a model</div>')
+    selected_model_path = st.selectbox(
+        "CNN Model",
+        options=list(AVAILABLE_MODELS),
+        format_func=lambda p: AVAILABLE_MODELS[p]["label"],
+        index=0,
+        label_visibility="collapsed",
+    )
+
+MODEL_SPEC = AVAILABLE_MODELS[selected_model_path]
+MODEL_NAME = MODEL_SPEC["label"]
+
+with st.spinner(f"Warming up {MODEL_NAME}..."):
+    try:
+        model = load_model(selected_model_path)
+    except Exception as exc:
+        st.error(f"Unable to load `{selected_model_path}`: {exc}")
+        st.stop()
+
+model_input = model.input_shape[1] if getattr(model, "input_shape", None) else 224
+
+
+with st.sidebar:
     html(
         f"""
         <div class="model-chip">
             <div>
-                <div class="lbl">CNN Model</div>
+                <div class="lbl">Active model</div>
                 <div class="nm">{MODEL_NAME}</div>
             </div>
             <div style="font-size:1.3rem;">🧠</div>
@@ -347,7 +367,7 @@ with st.sidebar:
     html(
         f"""
         <div class="side-grid">
-            <div class="info-tile"><div class="k">Input</div><div class="v">224 × 224</div></div>
+            <div class="info-tile"><div class="k">Input</div><div class="v">{model_input} × {model_input}</div></div>
             <div class="info-tile"><div class="k">Classes</div><div class="v">{len(CLASS_NAMES)}</div></div>
             <div class="info-tile"><div class="k">Threshold</div><div class="v">{int(CONFIDENCE_THRESHOLD*100)}%</div></div>
             <div class="info-tile"><div class="k">Framework</div><div class="v">TensorFlow</div></div>
@@ -375,8 +395,8 @@ html(
     <div class="hero">
         <span class="badge">AI Dermatology Assistant</span>
         <h1>Skin Disease Detection System</h1>
-        <p>Upload a clear, well-lit image of the affected skin area and let our
-        {MODEL_NAME} model provide a fast preliminary assessment.</p>
+        <p>Upload a clear, well-lit image of the affected skin area, pick your preferred
+        CNN model from the sidebar, and get a fast preliminary assessment.</p>
     </div>
     """
 )
@@ -398,16 +418,19 @@ if uploaded_file is not None:
     run = st.button("Analyze Image", type="primary", use_container_width=True)
 
     if run:
-        with st.spinner("Analyzing image features..."):
-            predictions = model.predict(process_image(image), verbose=0)[0]
+        with st.spinner(f"Analyzing image features with {MODEL_NAME}..."):
+            predictions = model.predict(
+                process_image(image, model_input, MODEL_SPEC["preprocess"]), verbose=0
+            )[0]
         st.session_state["prediction"] = {
             "name": uploaded_file.name,
+            "model": selected_model_path,
             "predictions": predictions.tolist(),
         }
 
     stored = st.session_state.get("prediction")
 
-    if stored and stored.get("name") == uploaded_file.name:
+    if stored and stored.get("name") == uploaded_file.name and stored.get("model") == selected_model_path:
         predictions = np.array(stored["predictions"])
         top_idx = int(np.argmax(predictions))
         predicted_class = CLASS_NAMES[top_idx]
