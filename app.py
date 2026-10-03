@@ -62,6 +62,11 @@ with st.sidebar:
     * **Architecture:** MobileNetV2 *(Optimized)*
     * **Input Dimension:** 224 × 224 px
     * **Target Classes:** 5 Categories
+      * Acne
+      * Eczema
+      * Melanoma
+      * Normal Skin
+      * Psoriasis
     * **Safety Threshold:** 60% Confidence
     """)
     
