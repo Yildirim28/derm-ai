@@ -549,7 +549,7 @@ with st.sidebar:
         )
 
     html(
-        '<div class="side-note"><strong>Educational project only.</strong> '
+        '<div class="side-note"><strong> DIP Course Project.</strong> '
         "This tool does not provide a medical diagnosis.</div>"
     )
 
