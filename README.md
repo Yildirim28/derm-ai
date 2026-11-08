@@ -3,6 +3,8 @@
 A Streamlit web application that classifies skin lesion images into **five**
 categories using a fine-tuned **MobileNetV2** model.
 
+Live App: https://derm-ai-yildirim.streamlit.app/
+
 ## How it works
 
 1. The user uploads a skin image.
